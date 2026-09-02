@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_smart_ir/flutter_smart_ir.dart';
+import 'package:flutter_ir/flutter_ir.dart';
 import 'package:http/http.dart' as http;
 
 void main() {
@@ -46,7 +46,7 @@ class _RemoteScreenState extends State<RemoteScreen> {
   }
 
   Future<void> _initEngine() async {
-    bool hasIr = await FlutterSmartIr.hasIrEmitter;
+    bool hasIr = await FlutterIr.hasIrEmitter;
     String jsonString = await rootBundle.loadString('assets/database/tv_codes.json');
     Map<String, dynamic> decoded = jsonDecode(jsonString);
 
@@ -65,7 +65,7 @@ class _RemoteScreenState extends State<RemoteScreen> {
       }
       String? hex = irDb[selectedBrand]?[key];
       if (hex != null) {
-        await FlutterSmartIr.transmitHex(hex);
+        await FlutterIr.transmitHex(hex);
         setState(() => statusMessage = 'SENT IR: $key ($selectedBrand)');
       } else {
         setState(() => statusMessage = 'NO HEX CODE FOR $key');
