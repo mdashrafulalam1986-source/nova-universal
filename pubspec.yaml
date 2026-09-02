@@ -1,7 +1,6 @@
 name: nova_universal
 description: "Nova Universal Remote Control Application"
 publish_to: 'none'
-
 version: 1.0.0+1
 
 environment:
@@ -11,6 +10,8 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.6
+  web_socket_channel: ^2.4.1
+  http: ^1.2.0
 
 dev_dependencies:
   flutter_test:
