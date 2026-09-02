@@ -27,7 +27,7 @@ jobs:
     - name: Re-create Android Project Structure
       run: |
         rm -rf android
-        flutter create . --platforms=android --org=com.nova.universal
+        flutter create --project-name nova_universal --platforms=android --org=com.nova.universal .
 
     - name: Accept Android Licenses
       run: yes | sdkmanager --licenses || true
