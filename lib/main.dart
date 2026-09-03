@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:web_socket_channel/io.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,6 +38,7 @@ class RemoteScreen extends StatefulWidget {
 
 class _RemoteScreenState extends State<RemoteScreen> {
   static const platform = MethodChannel('com.nova.universal/ir');
+  IOWebSocketChannel? _webSocketChannel;
 
   String selectedBrand = 'Minister (মিনোস্টার)';
   String selectedMode = 'IR Blaster (ইনফ্রারেড)';
@@ -56,7 +58,6 @@ class _RemoteScreenState extends State<RemoteScreen> {
     'Smart TV (Wi-Fi)'
   ];
 
-  // REAL IR HEX DATA DATABASE (NEC 32-bit Protocol Base)
   final Map<String, Map<String, int>> brandCommandHex = {
     'Minister (মিনোস্টার)': {
       'POWER': 0x12, 'MUTE': 0x10, 'NAV': 0x15,
@@ -120,31 +121,50 @@ class _RemoteScreenState extends State<RemoteScreen> {
     }
   };
 
-  // Convert Hex Command to NEC Protocol IR Pattern Signal
   List<int> buildNecPattern(int cmd) {
-    int address = 0x00; // Universal System Address
+    int address = 0x00;
     int addressInv = 0xFF;
     int cmdInv = (~cmd) & 0xFF;
 
     List<int> pattern = [];
-    
-    // Header Pulse (NEC Standard)
     pattern.add(9000);
     pattern.add(4500);
 
-    // Build 32-bit Frame (Address + ~Address + Command + ~Command)
     int fullData = (address << 24) | (addressInv << 16) | (cmd << 8) | cmdInv;
 
     for (int i = 31; i >= 0; i--) {
-      pattern.add(560); // Bit Mark
+      pattern.add(560);
       if ((fullData & (1 << i)) != 0) {
-        pattern.add(1690); // Logic '1' Space
+        pattern.add(1690);
       } else {
-        pattern.add(560);  // Logic '0' Space
+        pattern.add(560);
       }
     }
-    pattern.add(560); // Stop Bit
+    pattern.add(560);
     return pattern;
+  }
+
+  // WebSocket Connection Handler for Smart TVs
+  void sendWebSocketCommand(String key) {
+    String ip = ipController.text.trim();
+    if (ip.isEmpty) return;
+
+    try {
+      String wsUrl = 'ws://$ip:8001/api/v2/channels/samsung.remote.remote?name=NovaRemote';
+      _webSocketChannel ??= IOWebSocketChannel.connect(Uri.parse(wsUrl));
+
+      var payload = {
+        "method": "ms.remote.control",
+        "params": {
+          "Cmd": "Click",
+          "DataOfCmd": "KEY_$key",
+          "Option": "false",
+          "TypeOfRemote": "SendRemoteKey"
+        }
+      };
+
+      _webSocketChannel?.sink.add(jsonEncode(payload));
+    } catch (_) {}
   }
 
   Future<void> sendCommand(String key) async {
@@ -160,6 +180,8 @@ class _RemoteScreenState extends State<RemoteScreen> {
           'pattern': pattern,
         });
       } catch (_) {}
+    } else {
+      sendWebSocketCommand(key);
     }
   }
 
@@ -182,7 +204,6 @@ class _RemoteScreenState extends State<RemoteScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              // Dropdowns Row
               Row(
                 children: [
                   Expanded(
@@ -205,7 +226,6 @@ class _RemoteScreenState extends State<RemoteScreen> {
                 ],
               ),
 
-              // IP Field
               if (selectedMode.contains('Wi-Fi'))
                 Container(
                   height: 32,
@@ -236,7 +256,6 @@ class _RemoteScreenState extends State<RemoteScreen> {
                   ),
                 ),
 
-              // Status Bar
               Container(
                 height: 28,
                 width: double.infinity,
@@ -257,7 +276,6 @@ class _RemoteScreenState extends State<RemoteScreen> {
                 ),
               ),
 
-              // Power & Mute Bar
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
@@ -266,7 +284,6 @@ class _RemoteScreenState extends State<RemoteScreen> {
                 ],
               ),
 
-              // Keypad Grid
               GridView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
@@ -283,7 +300,6 @@ class _RemoteScreenState extends State<RemoteScreen> {
                 },
               ),
 
-              // App Buttons
               Row(
                 children: [
                   Expanded(child: _buildAppBtn('YouTube', const Color(0xFFE53935), () => sendCommand('YOUTUBE'))),
@@ -295,7 +311,6 @@ class _RemoteScreenState extends State<RemoteScreen> {
               ),
               _buildAppBtn('NETFLIX', const Color(0xFFD32F2F), () => sendCommand('NETFLIX')),
 
-              // Mode & Home Row
               Row(
                 children: [
                   Expanded(child: _buildSmallBtn('HOME', () => sendCommand('HOME'))),
@@ -304,7 +319,6 @@ class _RemoteScreenState extends State<RemoteScreen> {
                 ],
               ),
 
-              // D-Pad Directional Pad
               SizedBox(
                 width: 110,
                 height: 110,
@@ -367,7 +381,6 @@ class _RemoteScreenState extends State<RemoteScreen> {
                 ),
               ),
 
-              // Vol & Channel Controls
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
@@ -394,7 +407,6 @@ class _RemoteScreenState extends State<RemoteScreen> {
                 ],
               ),
 
-              // Media Controls
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
@@ -404,7 +416,6 @@ class _RemoteScreenState extends State<RemoteScreen> {
                 ],
               ),
 
-              // Color Buttons
               Row(
                 children: [
                   Expanded(child: _buildColorBtn('HPC', Colors.red, () => sendCommand('RED'))),
@@ -417,7 +428,6 @@ class _RemoteScreenState extends State<RemoteScreen> {
                 ],
               ),
 
-              // Footer Functions
               GridView.count(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
@@ -438,7 +448,6 @@ class _RemoteScreenState extends State<RemoteScreen> {
                 ],
               ),
 
-              // Brand Title Footer
               const Text(
                 'NOVA UNIVERSAL',
                 style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5),

@@ -1,5 +1,6 @@
 package com.nova.universal
 
+import android.content.Context
 import android.hardware.ConsumerIrManager
 import androidx.annotation.NonNull
 import io.flutter.embedding.android.FlutterActivity
@@ -11,40 +12,26 @@ class MainActivity: FlutterActivity() {
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
-            val irManager = getSystemService(CONSUMER_IR_SERVICE) as? ConsumerIrManager
+            if (call.method == "transmit") {
+                val frequency = call.argument<Int>("frequency") ?: 38000
+                val patternList = call.argument<List<Int>>("pattern")
+                
+                val irManager = getSystemService(Context.CONSUMER_IR_SERVICE) as? ConsumerIrManager
 
-            when (call.method) {
-                "hasIrEmitter" -> {
-                    if (irManager != null) {
-                        result.success(irManager.hasIrEmitter())
-                    } else {
-                        result.success(false)
-                    }
-                }
-                "transmit" -> {
-                    if (irManager == null || !irManager.hasIrEmitter()) {
-                        result.error("NO_IR", "IR Blaster hardware missing", null)
-                        return@setMethodCallHandler
-                    }
-
-                    val frequency = call.argument<Int>("frequency") ?: 38000
-                    val patternList = call.argument<List<Int>>("pattern")
-                    
+                if (irManager != null && irManager.hasIrEmitter()) {
                     if (patternList != null) {
                         val pattern = patternList.map { it.toInt() }.toIntArray()
-                        try {
-                            irManager.transmit(frequency, pattern)
-                            result.success(true)
-                        } catch (e: Exception) {
-                            result.error("TRANSMIT_ERROR", e.message, null)
-                        }
+                        irManager.transmit(frequency, pattern)
+                        result.success(true)
                     } else {
-                        result.error("INVALID_PATTERN", "Pattern empty", null)
+                        result.error("INVALID_PATTERN", "IR Pattern was null", null)
                     }
+                } else {
+                    result.error("NO_IR_EMITTER", "Device does not have an IR Blaster", null)
                 }
-                else -> result.notImplemented()
+            } else {
+                result.notImplemented()
             }
         }
     }
