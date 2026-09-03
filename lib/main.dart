@@ -21,7 +21,7 @@ class NovaRemoteApp extends StatelessWidget {
       title: 'NOVA UNIVERSAL',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF121212),
+        scaffoldBackgroundColor: const Color(0xFF0F0F17),
       ),
       home: const RemoteScreen(),
     );
@@ -38,286 +38,315 @@ class RemoteScreen extends StatefulWidget {
 class _RemoteScreenState extends State<RemoteScreen> {
   static const platform = MethodChannel('com.nova.universal/ir');
 
-  String selectedBrand = 'Minister';
-  String selectedMode = 'IR Blaster';
-  bool isScanning = false;
-  List<String> discoveredDevices = [];
+  String selectedBrand = 'Minister (মিনোস্টার)';
+  String selectedMode = 'Smart TV (Wi-Fi)';
+  TextEditingController ipController = TextEditingController(text: '192.168.0.100');
 
-  final Map<String, Map<String, List<int>>> irCodes = {
-    'POWER': {'freq': 38000, 'pattern': [9000, 4500, 560, 560, 560, 1690, 560, 1690]},
-    'MUTE': {'freq': 38000, 'pattern': [9000, 4500, 560, 1690, 560, 560, 560, 1690]},
-    'VOL_UP': {'freq': 38000, 'pattern': [9000, 4500, 560, 1690, 560, 1690, 560, 560]},
-    'VOL_DOWN': {'freq': 38000, 'pattern': [9000, 4500, 560, 560, 560, 1690, 560, 560]},
-    'CH_UP': {'freq': 38000, 'pattern': [9000, 4500, 560, 1690, 560, 560, 560, 560]},
-    'CH_DOWN': {'freq': 38000, 'pattern': [9000, 4500, 560, 560, 560, 560, 560, 1690]},
-    'OK': {'freq': 38000, 'pattern': [9000, 4500, 560, 1690, 560, 1690, 560, 1690]},
-    'UP': {'freq': 38000, 'pattern': [9000, 4500, 560, 560, 560, 560, 560, 560]},
-    'DOWN': {'freq': 38000, 'pattern': [9000, 4500, 560, 1690, 560, 1690, 560, 560]},
-    'LEFT': {'freq': 38000, 'pattern': [9000, 4500, 560, 560, 560, 1690, 560, 1690]},
-    'RIGHT': {'freq': 38000, 'pattern': [9000, 4500, 560, 1690, 560, 560, 560, 1690]},
-    'HOME': {'freq': 38000, 'pattern': [9000, 4500, 560, 1690, 560, 1690, 560, 1690]},
-    'MODE': {'freq': 38000, 'pattern': [9000, 4500, 560, 560, 560, 560, 560, 1690]},
-  };
+  final List<String> brands = [
+    'Minister (মিনোস্টার)',
+    'Walton',
+    'Sony',
+    'LG',
+    'Samsung',
+    'General IR'
+  ];
 
-  Future<void> sendIrCommand(String key) async {
+  final List<String> modes = [
+    'Smart TV (Wi-Fi)',
+    'IR Blaster (ইনফ্রারেড)'
+  ];
+
+  Future<void> sendCommand(String key) async {
     HapticFeedback.lightImpact();
-    if (selectedMode == 'IR Blaster') {
+    if (selectedMode.contains('IR')) {
       try {
-        final code = irCodes[key];
-        if (code != null) {
-          await platform.invokeMethod('transmit', {
-            'frequency': code['freq'],
-            'pattern': code['pattern'],
-          });
-        }
+        await platform.invokeMethod('transmit', {
+          'frequency': 38000,
+          'pattern': [9000, 4500, 560, 560, 560, 1690],
+        });
       } catch (_) {}
     }
-  }
-
-  Future<void> discoverSmartTvs() async {
-    setState(() {
-      isScanning = true;
-      discoveredDevices.clear();
-    });
-
-    try {
-      RawDatagramSocket socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
-      socket.broadcastEnabled = true;
-
-      String ssdpQuery =
-          'M-SEARCH * HTTP/1.1\r\n' +
-          'HOST: 239.255.255.250:1900\r\n' +
-          'MAN: "ssdp:discover"\r\n' +
-          'MX: 2\r\n' +
-          'ST: ssdp:all\r\n\r\n';
-
-      socket.send(utf8.encode(ssdpQuery), InternetAddress('239.255.255.250'), 1900);
-
-      socket.listen((RawSocketEvent event) {
-        if (event == RawSocketEvent.read) {
-          Datagram? dg = socket.receive();
-          if (dg != null) {
-            String response = utf8.decode(dg.data);
-            if (response.contains('LOCATION:') || response.contains('Server:')) {
-              String ip = dg.address.address;
-              if (!discoveredDevices.contains(ip)) {
-                setState(() {
-                  discoveredDevices.add(ip);
-                });
-              }
-            }
-          }
-        }
-      });
-
-      await Future.delayed(const Duration(seconds: 3));
-      socket.close();
-    } catch (_) {}
-
-    setState(() {
-      isScanning = false;
-    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('NOVA UNIVERSAL', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+        title: const Text(
+          'nova universal',
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: 0.8),
+        ),
         centerTitle: true,
-        backgroundColor: const Color(0xFF1E1E2C),
+        backgroundColor: const Color(0xFF161622),
         elevation: 0,
-        toolbarHeight: 40,
-        actions: [
-          IconButton(
-            icon: isScanning
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Icon(Icons.wifi_find, size: 20),
-            onPressed: discoverSmartTvs,
-          )
-        ],
+        toolbarHeight: 36,
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
+          padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
+              // Dropdowns Row
               Row(
                 children: [
                   Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      decoration: BoxDecoration(color: const Color(0xFF2A2A3D), borderRadius: BorderRadius.circular(8)),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: selectedBrand,
-                          isExpanded: true,
-                          dropdownColor: const Color(0xFF2A2A3D),
-                          style: const TextStyle(color: Colors.white, fontSize: 13),
-                          items: ['Minister', 'Walton', 'Sony', 'LG', 'Samsung', 'General IR']
-                              .map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                          onChanged: (val) => setState(() => selectedBrand = val!),
-                        ),
-                      ),
+                    child: _buildDropdown(
+                      'টিভি ব্র্যান্ড নির্বাচন করুন:',
+                      selectedBrand,
+                      brands,
+                      (val) => setState(() => selectedBrand = val!),
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
                   Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      decoration: BoxDecoration(color: const Color(0xFF2A2A3D), borderRadius: BorderRadius.circular(8)),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: selectedMode,
-                          isExpanded: true,
-                          dropdownColor: const Color(0xFF2A2A3D),
-                          style: const TextStyle(color: Colors.white, fontSize: 13),
-                          items: ['IR Blaster', 'Wi-Fi Mode']
-                              .map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                          onChanged: (val) => setState(() => selectedMode = val!),
-                        ),
-                      ),
+                    child: _buildDropdown(
+                      'সংযোগ মোড:',
+                      selectedMode,
+                      modes,
+                      (val) => setState(() => selectedMode = val!),
                     ),
                   ),
                 ],
               ),
-              if (discoveredDevices.isNotEmpty)
+
+              // IP Field
+              if (selectedMode.contains('Wi-Fi'))
                 Container(
-                  height: 30,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: discoveredDevices.length,
-                    itemBuilder: (context, i) => Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: Chip(
-                        label: Text(discoveredDevices[i], style: const TextStyle(fontSize: 10)),
-                        backgroundColor: const Color(0xFF3F3F56),
+                  height: 32,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E2C),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    children: [
+                      const Text(
+                        'স্মার্ট টিভি IP Address:',
+                        style: TextStyle(fontSize: 10, color: Colors.grey),
                       ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: ipController,
+                          style: const TextStyle(fontSize: 11, color: Colors.white),
+                          decoration: const InputDecoration(
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              // Status Bar
+              Container(
+                height: 28,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E1E2C),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Center(
+                  child: Text(
+                    'READY (MINISTER - SMART)',
+                    style: TextStyle(
+                      color: Colors.greenAccent,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.0,
                     ),
                   ),
                 ),
+              ),
+
+              // Power & Mute Bar
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  _buildCircleBtn(Icons.power_settings_new, Colors.red, () => sendIrCommand('POWER')),
-                  _buildTextBtn('HOME', () => sendIrCommand('HOME')),
-                  _buildTextBtn('MODE', () => sendIrCommand('MODE')),
-                  _buildCircleBtn(Icons.volume_off, Colors.blue, () => sendIrCommand('MUTE')),
+                  _buildCircleBtn(Icons.power_settings_new, Colors.red, () => sendCommand('POWER')),
+                  _buildCircleBtn(Icons.near_me, Colors.indigoAccent, () => sendCommand('NAV')),
                 ],
               ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  Column(
-                    children: [
-                      _buildPillBtn('VOL +', () => sendIrCommand('VOL_UP')),
-                      const SizedBox(height: 8),
-                      _buildPillBtn('VOL -', () => sendIrCommand('VOL_DOWN')),
-                    ],
-                  ),
-                  SizedBox(
-                    width: 135,
-                    height: 135,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Container(
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF2A2A3D),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        Align(
-                          alignment: Alignment.topCenter,
-                          child: IconButton(
-                            icon: const Icon(Icons.arrow_drop_up, color: Colors.white, size: 28),
-                            onPressed: () => sendIrCommand('UP'),
-                          ),
-                        ),
-                        Align(
-                          alignment: Alignment.bottomCenter,
-                          child: IconButton(
-                            icon: const Icon(Icons.arrow_drop_down, color: Colors.white, size: 28),
-                            onPressed: () => sendIrCommand('DOWN'),
-                          ),
-                        ),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: IconButton(
-                            icon: const Icon(Icons.arrow_left, color: Colors.white, size: 28),
-                            onPressed: () => sendIrCommand('LEFT'),
-                          ),
-                        ),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: IconButton(
-                            icon: const Icon(Icons.arrow_right, color: Colors.white, size: 28),
-                            onPressed: () => sendIrCommand('RIGHT'),
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: () => sendIrCommand('OK'),
-                          child: Container(
-                            width: 48,
-                            height: 48,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFF1E1E2C),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Center(
-                              child: Text('OK', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Column(
-                    children: [
-                      _buildPillBtn('CH ▲', () => sendIrCommand('CH_UP')),
-                      const SizedBox(height: 8),
-                      _buildPillBtn('CH ▼', () => sendIrCommand('CH_DOWN')),
-                    ],
-                  ),
-                ],
-              ),
+
+              // Keypad Grid
               GridView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 3,
-                  childAspectRatio: 2.3,
-                  crossAxisSpacing: 8,
-                  mainAxisSpacing: 6,
+                  childAspectRatio: 2.8,
+                  crossAxisSpacing: 6,
+                  mainAxisSpacing: 4,
                 ),
                 itemCount: 12,
                 itemBuilder: (context, index) {
-                  final labels = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '-', '0', '↩'];
-                  return ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2A2A3D),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                      padding: EdgeInsets.zero,
-                    ),
-                    onPressed: () => sendIrCommand(labels[index]),
-                    child: Text(
-                      labels[index],
-                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                    ),
-                  );
+                  final keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '-', '0', '↩'];
+                  return _buildSmallBtn(keys[index], () => sendCommand(keys[index]));
                 },
               ),
+
+              // App Buttons
               Row(
                 children: [
-                  Expanded(child: _buildAppBtn('YouTube', const Color(0xFFE53935), () => sendIrCommand('YOUTUBE'))),
-                  const SizedBox(width: 6),
-                  Expanded(child: _buildAppBtn('Hoichoi', const Color(0xFF393E46), () => sendIrCommand('HOICHOI'))),
-                  const SizedBox(width: 6),
-                  Expanded(child: _buildAppBtn('Amazon', const Color(0xFF00A8E8), () => sendIrCommand('AMAZON'))),
-                  const SizedBox(width: 6),
-                  Expanded(child: _buildAppBtn('NETFLIX', const Color(0xFFD32F2F), () => sendIrCommand('NETFLIX'))),
+                  Expanded(child: _buildAppBtn('YouTube', const Color(0xFFE53935), () => sendCommand('YOUTUBE'))),
+                  const SizedBox(width: 4),
+                  Expanded(child: _buildAppBtn('Hoichoi', const Color(0xFF2A2A3D), () => sendCommand('HOICHOI'))),
+                  const SizedBox(width: 4),
+                  Expanded(child: _buildAppBtn('Amazon', const Color(0xFF00A8E8), () => sendCommand('AMAZON'))),
                 ],
+              ),
+              _buildAppBtn('NETFLIX', const Color(0xFFD32F2F), () => sendCommand('NETFLIX')),
+
+              // Mode & Home Row
+              Row(
+                children: [
+                  Expanded(child: _buildSmallBtn('HOME', () => sendCommand('HOME'))),
+                  const SizedBox(width: 6),
+                  Expanded(child: _buildSmallBtn('MODE', () => sendCommand('MODE'))),
+                ],
+              ),
+
+              // D-Pad Directional Pad
+              SizedBox(
+                width: 110,
+                height: 110,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF1E1E2C),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.topCenter,
+                      child: IconButton(
+                        iconSize: 22,
+                        icon: const Icon(Icons.arrow_drop_up, color: Colors.white),
+                        onPressed: () => sendCommand('UP'),
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: IconButton(
+                        iconSize: 22,
+                        icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
+                        onPressed: () => sendCommand('DOWN'),
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: IconButton(
+                        iconSize: 22,
+                        icon: const Icon(Icons.arrow_left, color: Colors.white),
+                        onPressed: () => sendCommand('LEFT'),
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: IconButton(
+                        iconSize: 22,
+                        icon: const Icon(Icons.arrow_right, color: Colors.white),
+                        onPressed: () => sendCommand('RIGHT'),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => sendCommand('OK'),
+                      child: Container(
+                        width: 38,
+                        height: 38,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF2A2A3D),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Center(
+                          child: Text('OK', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Vol & Channel Controls
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildSmallBtn('HOME', () => sendCommand('HOME2')),
+                  _buildSmallBtn('EXT', () => sendCommand('EXT')),
+                ],
+              ),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildPillBtn('VOL +', () => sendCommand('VOL_UP')),
+                  _buildPillBtn('RESPECT', () => sendCommand('RESPECT')),
+                  _buildPillBtn('CH ▲', () => sendCommand('CH_UP')),
+                ],
+              ),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildPillBtn('VOL -', () => sendCommand('VOL_DOWN')),
+                  _buildPillBtn('TV', () => sendCommand('TV')),
+                  _buildPillBtn('CH ▼', () => sendCommand('CH_DOWN')),
+                ],
+              ),
+
+              // Media Controls
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildIconBtn(Icons.fast_rewind, () => sendCommand('REWIND')),
+                  _buildIconBtn(Icons.play_arrow, () => sendCommand('PLAY')),
+                  _buildIconBtn(Icons.fast_forward, () => sendCommand('FFWD')),
+                ],
+              ),
+
+              // Color Buttons
+              Row(
+                children: [
+                  Expanded(child: _buildColorBtn('HPC', Colors.red, () => sendCommand('RED'))),
+                  const SizedBox(width: 4),
+                  Expanded(child: _buildColorBtn('MASE', Colors.green, () => sendCommand('GREEN'))),
+                  const SizedBox(width: 4),
+                  Expanded(child: _buildColorBtn('CC', Colors.yellow, () => sendCommand('YELLOW'))),
+                  const SizedBox(width: 4),
+                  Expanded(child: _buildColorBtn('🔒', Colors.blue, () => sendCommand('BLUE'))),
+                ],
+              ),
+
+              // Footer Functions
+              GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: 3,
+                childAspectRatio: 3.5,
+                crossAxisSpacing: 4,
+                mainAxisSpacing: 4,
+                children: [
+                  _buildSmallText('N-CH.P', () => sendCommand('FN1')),
+                  _buildSmallText('CC', () => sendCommand('FN2')),
+                  _buildSmallText('MTR', () => sendCommand('FN3')),
+                  _buildSmallText('F-MODE', () => sendCommand('FN4')),
+                  _buildSmallText('S.MCOB', () => sendCommand('FN5')),
+                  _buildSmallText('CRLUST', () => sendCommand('FN6')),
+                  _buildSmallText('FMODE', () => sendCommand('FN7')),
+                  _buildSmallText('S.MODE', () => sendCommand('FN8')),
+                  _buildSmallText('DELETE', () => sendCommand('FN9')),
+                ],
+              ),
+
+              // Brand Title Footer
+              const Text(
+                'NOVA UNIVERSAL',
+                style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5),
               ),
             ],
           ),
@@ -326,61 +355,138 @@ class _RemoteScreenState extends State<RemoteScreen> {
     );
   }
 
+  Widget _buildDropdown(String label, String value, List<String> items, ValueChanged<String?> onChanged) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E2C),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 8, color: Colors.grey)),
+          DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: value,
+              isDense: true,
+              isExpanded: true,
+              dropdownColor: const Color(0xFF1E1E2C),
+              style: const TextStyle(color: Colors.white, fontSize: 10),
+              items: items.map((e) => DropdownMenuItem(value: e, child: Text(e, overflow: TextOverflow.ellipsis))).toList(),
+              onChanged: onChanged,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildCircleBtn(IconData icon, Color color, VoidCallback onTap) {
     return Container(
-      width: 42,
-      height: 42,
+      width: 36,
+      height: 36,
       decoration: BoxDecoration(color: color, shape: BoxShape.circle),
       child: IconButton(
-        icon: Icon(icon, color: Colors.white, size: 20),
+        padding: EdgeInsets.zero,
+        icon: Icon(icon, color: Colors.white, size: 18),
         onPressed: onTap,
       ),
     );
   }
 
-  Widget _buildTextBtn(String label, VoidCallback onTap) {
+  Widget _buildSmallBtn(String label, VoidCallback onTap) {
     return SizedBox(
-      width: 62,
-      height: 36,
+      height: 26,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF2A2A3D),
+          backgroundColor: const Color(0xFF1E1E2C),
           padding: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
         ),
         onPressed: onTap,
-        child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+        child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
       ),
     );
   }
 
   Widget _buildPillBtn(String label, VoidCallback onTap) {
     return SizedBox(
-      width: 62,
-      height: 34,
+      width: 70,
+      height: 24,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF2A2A3D),
+          backgroundColor: const Color(0xFF1E1E2C),
           padding: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
         onPressed: onTap,
-        child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+        child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
       ),
     );
   }
 
   Widget _buildAppBtn(String label, Color bg, VoidCallback onTap) {
     return SizedBox(
-      height: 30,
+      height: 24,
+      width: double.infinity,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor: bg,
           padding: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
         ),
         onPressed: onTap,
-        child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+        child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+
+  Widget _buildIconBtn(IconData icon, VoidCallback onTap) {
+    return Container(
+      width: 50,
+      height: 24,
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E2C),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: IconButton(
+        padding: EdgeInsets.zero,
+        icon: Icon(icon, color: Colors.white, size: 14),
+        onPressed: onTap,
+      ),
+    );
+  }
+
+  Widget _buildColorBtn(String text, Color bg, VoidCallback onTap) {
+    return SizedBox(
+      height: 22,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: bg,
+          padding: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+        ),
+        onPressed: onTap,
+        child: Text(text, style: const TextStyle(color: Colors.black, fontSize: 9, fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+
+  Widget _buildSmallText(String text, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E1E2C),
+          borderRadius: BorderRadius.circular(3),
+        ),
+        child: Center(
+          child: Text(
+            text,
+            style: const TextStyle(color: Colors.grey, fontSize: 8, fontWeight: FontWeight.w500),
+          ),
+        ),
       ),
     );
   }
