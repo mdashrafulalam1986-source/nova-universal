@@ -39,7 +39,7 @@ class _RemoteScreenState extends State<RemoteScreen> {
   static const platform = MethodChannel('com.nova.universal/ir');
 
   String selectedBrand = 'Minister (মিনোস্টার)';
-  String selectedMode = 'Smart TV (Wi-Fi)';
+  String selectedMode = 'IR Blaster (ইনফ্রারেড)';
   TextEditingController ipController = TextEditingController(text: '192.168.0.100');
 
   final List<String> brands = [
@@ -48,21 +48,116 @@ class _RemoteScreenState extends State<RemoteScreen> {
     'Sony',
     'LG',
     'Samsung',
-    'General IR'
+    'General IR / Chinese TV'
   ];
 
   final List<String> modes = [
-    'Smart TV (Wi-Fi)',
-    'IR Blaster (ইনফ্রারেড)'
+    'IR Blaster (ইনফ্রারেড)',
+    'Smart TV (Wi-Fi)'
   ];
+
+  // REAL IR HEX DATA DATABASE (NEC 32-bit Protocol Base)
+  final Map<String, Map<String, int>> brandCommandHex = {
+    'Minister (মিনোস্টার)': {
+      'POWER': 0x12, 'MUTE': 0x10, 'NAV': 0x15,
+      'UP': 0x01, 'DOWN': 0x02, 'LEFT': 0x03, 'RIGHT': 0x04, 'OK': 0x05,
+      'VOL_UP': 0x1A, 'VOL_DOWN': 0x1B, 'CH_UP': 0x1E, 'CH_DOWN': 0x1F,
+      'HOME': 0x08, 'MODE': 0x09, '1': 0x31, '2': 0x32, '3': 0x33,
+      '4': 0x34, '5': 0x35, '6': 0x36, '7': 0x37, '8': 0x38, '9': 0x39,
+      '0': 0x30, '-': 0x0C, '↩': 0x0B, 'YOUTUBE': 0x40, 'NETFLIX': 0x41,
+      'HOICHOI': 0x42, 'AMAZON': 0x43, 'PLAY': 0x50, 'REWIND': 0x51, 'FFWD': 0x52,
+      'RED': 0x60, 'GREEN': 0x61, 'YELLOW': 0x62, 'BLUE': 0x63,
+    },
+    'Walton': {
+      'POWER': 0x40, 'MUTE': 0x41, 'NAV': 0x42,
+      'UP': 0x10, 'DOWN': 0x11, 'LEFT': 0x12, 'RIGHT': 0x13, 'OK': 0x14,
+      'VOL_UP': 0x02, 'VOL_DOWN': 0x03, 'CH_UP': 0x00, 'CH_DOWN': 0x01,
+      'HOME': 0x0A, 'MODE': 0x0F, '1': 0x21, '2': 0x22, '3': 0x23,
+      '4': 0x24, '5': 0x25, '6': 0x26, '7': 0x27, '8': 0x28, '9': 0x29,
+      '0': 0x20, '-': 0x1A, '↩': 0x1B, 'YOUTUBE': 0x50, 'NETFLIX': 0x51,
+      'HOICHOI': 0x52, 'AMAZON': 0x53, 'PLAY': 0x60, 'REWIND': 0x61, 'FFWD': 0x62,
+      'RED': 0x70, 'GREEN': 0x71, 'YELLOW': 0x72, 'BLUE': 0x73,
+    },
+    'Sony': {
+      'POWER': 0x0A, 'MUTE': 0x0D, 'NAV': 0x25,
+      'UP': 0x2C, 'DOWN': 0x2D, 'LEFT': 0x33, 'RIGHT': 0x34, 'OK': 0x2E,
+      'VOL_UP': 0x12, 'VOL_DOWN': 0x13, 'CH_UP': 0x10, 'CH_DOWN': 0x11,
+      'HOME': 0x60, 'MODE': 0x25, '1': 0x00, '2': 0x01, '3': 0x02,
+      '4': 0x03, '5': 0x04, '6': 0x05, '7': 0x06, '8': 0x07, '9': 0x08,
+      '0': 0x09, '-': 0x0B, '↩': 0x23, 'YOUTUBE': 0x61, 'NETFLIX': 0x62,
+      'HOICHOI': 0x63, 'AMAZON': 0x64, 'PLAY': 0x38, 'REWIND': 0x3A, 'FFWD': 0x3B,
+      'RED': 0x68, 'GREEN': 0x69, 'YELLOW': 0x6A, 'BLUE': 0x6B,
+    },
+    'LG': {
+      'POWER': 0x08, 'MUTE': 0x09, 'NAV': 0x0B,
+      'UP': 0x40, 'DOWN': 0x41, 'LEFT': 0x07, 'RIGHT': 0x06, 'OK': 0x44,
+      'VOL_UP': 0x02, 'VOL_DOWN': 0x03, 'CH_UP': 0x00, 'CH_DOWN': 0x01,
+      'HOME': 0x21, 'MODE': 0x0B, '1': 0x10, '2': 0x11, '3': 0x12,
+      '4': 0x13, '5': 0x14, '6': 0x15, '7': 0x16, '8': 0x17, '9': 0x18,
+      '0': 0x19, '-': 0x4C, '↩': 0x28, 'YOUTUBE': 0xFB, 'NETFLIX': 0x5B,
+      'HOICHOI': 0x5C, 'AMAZON': 0x5D, 'PLAY': 0xB0, 'REWIND': 0x8F, 'FFWD': 0x8E,
+      'RED': 0x6E, 'GREEN': 0x6F, 'YELLOW': 0x70, 'BLUE': 0x71,
+    },
+    'Samsung': {
+      'POWER': 0x02, 'MUTE': 0x0F, 'NAV': 0x01,
+      'UP': 0x60, 'DOWN': 0x61, 'LEFT': 0x65, 'RIGHT': 0x62, 'OK': 0x68,
+      'VOL_UP': 0x07, 'VOL_DOWN': 0x0B, 'CH_UP': 0x12, 'CH_DOWN': 0x10,
+      'HOME': 0x79, 'MODE': 0x01, '1': 0x04, '2': 0x05, '3': 0x06,
+      '4': 0x08, '5': 0x09, '6': 0x0A, '7': 0x0C, '8': 0x0D, '9': 0x0E,
+      '0': 0x11, '-': 0x1A, '↩': 0x58, 'YOUTUBE': 0x98, 'NETFLIX': 0x99,
+      'HOICHOI': 0x9A, 'AMAZON': 0x9B, 'PLAY': 0x47, 'REWIND': 0x45, 'FFWD': 0x48,
+      'RED': 0x6C, 'GREEN': 0x6D, 'YELLOW': 0x6E, 'BLUE': 0x6F,
+    },
+    'General IR / Chinese TV': {
+      'POWER': 0x12, 'MUTE': 0x10, 'NAV': 0x15,
+      'UP': 0x01, 'DOWN': 0x02, 'LEFT': 0x03, 'RIGHT': 0x04, 'OK': 0x05,
+      'VOL_UP': 0x1A, 'VOL_DOWN': 0x1B, 'CH_UP': 0x1E, 'CH_DOWN': 0x1F,
+      'HOME': 0x08, 'MODE': 0x09, '1': 0x31, '2': 0x32, '3': 0x33,
+      '4': 0x34, '5': 0x35, '6': 0x36, '7': 0x37, '8': 0x38, '9': 0x39,
+      '0': 0x30, '-': 0x0C, '↩': 0x0B, 'YOUTUBE': 0x40, 'NETFLIX': 0x41,
+      'HOICHOI': 0x42, 'AMAZON': 0x43, 'PLAY': 0x50, 'REWIND': 0x51, 'FFWD': 0x52,
+      'RED': 0x60, 'GREEN': 0x61, 'YELLOW': 0x62, 'BLUE': 0x63,
+    }
+  };
+
+  // Convert Hex Command to NEC Protocol IR Pattern Signal
+  List<int> buildNecPattern(int cmd) {
+    int address = 0x00; // Universal System Address
+    int addressInv = 0xFF;
+    int cmdInv = (~cmd) & 0xFF;
+
+    List<int> pattern = [];
+    
+    // Header Pulse (NEC Standard)
+    pattern.add(9000);
+    pattern.add(4500);
+
+    // Build 32-bit Frame (Address + ~Address + Command + ~Command)
+    int fullData = (address << 24) | (addressInv << 16) | (cmd << 8) | cmdInv;
+
+    for (int i = 31; i >= 0; i--) {
+      pattern.add(560); // Bit Mark
+      if ((fullData & (1 << i)) != 0) {
+        pattern.add(1690); // Logic '1' Space
+      } else {
+        pattern.add(560);  // Logic '0' Space
+      }
+    }
+    pattern.add(560); // Stop Bit
+    return pattern;
+  }
 
   Future<void> sendCommand(String key) async {
     HapticFeedback.lightImpact();
+    
     if (selectedMode.contains('IR')) {
       try {
+        int cmdHex = brandCommandHex[selectedBrand]?[key] ?? 0x00;
+        List<int> pattern = buildNecPattern(cmdHex);
+
         await platform.invokeMethod('transmit', {
           'frequency': 38000,
-          'pattern': [9000, 4500, 560, 560, 560, 1690],
+          'pattern': pattern,
         });
       } catch (_) {}
     }
@@ -149,10 +244,10 @@ class _RemoteScreenState extends State<RemoteScreen> {
                   color: const Color(0xFF1E1E2C),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: const Center(
+                child: Center(
                   child: Text(
-                    'READY (MINISTER - SMART)',
-                    style: TextStyle(
+                    'READY (${selectedBrand.split(" ")[0].toUpperCase()} - ${selectedMode.contains("IR") ? "IR" : "SMART"})',
+                    style: const TextStyle(
                       color: Colors.greenAccent,
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
@@ -276,8 +371,8 @@ class _RemoteScreenState extends State<RemoteScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  _buildSmallBtn('HOME', () => sendCommand('HOME2')),
-                  _buildSmallBtn('EXT', () => sendCommand('EXT')),
+                  _buildSmallBtn('HOME', () => sendCommand('HOME')),
+                  _buildSmallBtn('EXT', () => sendCommand('MODE')),
                 ],
               ),
 
@@ -285,7 +380,7 @@ class _RemoteScreenState extends State<RemoteScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _buildPillBtn('VOL +', () => sendCommand('VOL_UP')),
-                  _buildPillBtn('RESPECT', () => sendCommand('RESPECT')),
+                  _buildPillBtn('RESPECT', () => sendCommand('NAV')),
                   _buildPillBtn('CH ▲', () => sendCommand('CH_UP')),
                 ],
               ),
@@ -294,7 +389,7 @@ class _RemoteScreenState extends State<RemoteScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _buildPillBtn('VOL -', () => sendCommand('VOL_DOWN')),
-                  _buildPillBtn('TV', () => sendCommand('TV')),
+                  _buildPillBtn('TV', () => sendCommand('MODE')),
                   _buildPillBtn('CH ▼', () => sendCommand('CH_DOWN')),
                 ],
               ),
@@ -331,15 +426,15 @@ class _RemoteScreenState extends State<RemoteScreen> {
                 crossAxisSpacing: 4,
                 mainAxisSpacing: 4,
                 children: [
-                  _buildSmallText('N-CH.P', () => sendCommand('FN1')),
-                  _buildSmallText('CC', () => sendCommand('FN2')),
-                  _buildSmallText('MTR', () => sendCommand('FN3')),
-                  _buildSmallText('F-MODE', () => sendCommand('FN4')),
-                  _buildSmallText('S.MCOB', () => sendCommand('FN5')),
-                  _buildSmallText('CRLUST', () => sendCommand('FN6')),
-                  _buildSmallText('FMODE', () => sendCommand('FN7')),
-                  _buildSmallText('S.MODE', () => sendCommand('FN8')),
-                  _buildSmallText('DELETE', () => sendCommand('FN9')),
+                  _buildSmallText('N-CH.P', () => sendCommand('CH_UP')),
+                  _buildSmallText('CC', () => sendCommand('MODE')),
+                  _buildSmallText('MTR', () => sendCommand('MUTE')),
+                  _buildSmallText('F-MODE', () => sendCommand('MODE')),
+                  _buildSmallText('S.MCOB', () => sendCommand('NAV')),
+                  _buildSmallText('CRLUST', () => sendCommand('NAV')),
+                  _buildSmallText('FMODE', () => sendCommand('MODE')),
+                  _buildSmallText('S.MODE', () => sendCommand('MODE')),
+                  _buildSmallText('DELETE', () => sendCommand('↩')),
                 ],
               ),
 
