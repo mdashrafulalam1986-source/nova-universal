@@ -1,398 +1,323 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:web_socket_channel/io.dart';
 
 void main() {
-  runApp(const NovaUniversalApp());
+  WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+  ]);
+  runApp(const NovaRemoteApp());
 }
 
-class NovaUniversalApp extends StatelessWidget {
-  const NovaUniversalApp({super.key});
+class NovaRemoteApp extends StatelessWidget {
+  const NovaRemoteApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      title: 'NOVA UNIVERSAL',
       debugShowCheckedModeBanner: false,
-      title: 'Nova Universal',
       theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF0F0F12),
-        primaryColor: Colors.deepOrange,
+        scaffoldBackgroundColor: const Color(0xFF121212),
       ),
-      home: const RemoteHomeScreen(),
+      home: const RemoteScreen(),
     );
   }
 }
 
-class RemoteHomeScreen extends StatefulWidget {
-  const RemoteHomeScreen({super.key});
+class RemoteScreen extends StatefulWidget {
+  const RemoteScreen({super.key});
 
   @override
-  State<RemoteHomeScreen> createState() => _RemoteHomeScreenState();
+  State<RemoteScreen> createState() => _RemoteScreenState();
 }
 
-class _RemoteHomeScreenState extends State<RemoteHomeScreen> {
+class _RemoteScreenState extends State<RemoteScreen> {
   static const platform = MethodChannel('com.nova.universal/ir');
-  
-  String selectedBrand = 'Minister (মিনিস্টার)';
-  String selectedMode = 'IR Blaster (ইনফ্রারেড)';
-  bool hasIrSensor = false;
+
+  String selectedBrand = 'Minister';
+  String selectedMode = 'IR Blaster';
   bool isScanning = false;
-  TextEditingController ipController = TextEditingController(text: '192.168.0.100');
-  IOWebSocketChannel? _wsChannel;
+  List<String> discoveredDevices = [];
 
-  final List<String> brands = [
-    'Minister (মিনিস্টার)',
-    'Samsung Smart TV',
-    'LG webOS TV',
-    'Sony Android TV',
-    'Walton',
-    'Vision',
-    'General TV'
-  ];
+  final Map<String, Map<String, List<int>>> irCodes = {
+    'POWER': {'freq': 38000, 'pattern': [9000, 4500, 560, 560, 560, 1690, 560, 1690]},
+    'MUTE': {'freq': 38000, 'pattern': [9000, 4500, 560, 1690, 560, 560, 560, 1690]},
+    'VOL_UP': {'freq': 38000, 'pattern': [9000, 4500, 560, 1690, 560, 1690, 560, 560]},
+    'VOL_DOWN': {'freq': 38000, 'pattern': [9000, 4500, 560, 560, 560, 1690, 560, 560]},
+    'CH_UP': {'freq': 38000, 'pattern': [9000, 4500, 560, 1690, 560, 560, 560, 560]},
+    'CH_DOWN': {'freq': 38000, 'pattern': [9000, 4500, 560, 560, 560, 560, 560, 1690]},
+    'OK': {'freq': 38000, 'pattern': [9000, 4500, 560, 1690, 560, 1690, 560, 1690]},
+    'UP': {'freq': 38000, 'pattern': [9000, 4500, 560, 560, 560, 560, 560, 560]},
+    'DOWN': {'freq': 38000, 'pattern': [9000, 4500, 560, 1690, 560, 1690, 560, 560]},
+    'LEFT': {'freq': 38000, 'pattern': [9000, 4500, 560, 560, 560, 1690, 560, 1690]},
+    'RIGHT': {'freq': 38000, 'pattern': [9000, 4500, 560, 1690, 560, 560, 560, 1690]},
+    'HOME': {'freq': 38000, 'pattern': [9000, 4500, 560, 1690, 560, 1690, 560, 1690]},
+    'MODE': {'freq': 38000, 'pattern': [9000, 4500, 560, 560, 560, 560, 560, 1690]},
+  };
 
-  final List<String> modes = [
-    'IR Blaster (ইনফ্রারেড)',
-    'Smart TV (Wi-Fi WebSocket)'
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _checkIrSensor();
-  }
-
-  Future<void> _checkIrSensor() async {
-    try {
-      final bool result = await platform.invokeMethod('hasIrEmitter');
-      setState(() => hasIrSensor = result);
-    } catch (_) {
-      setState(() => hasIrSensor = false);
+  Future<void> sendIrCommand(String key) async {
+    HapticFeedback.lightImpact();
+    if (selectedMode == 'IR Blaster') {
+      try {
+        final code = irCodes[key];
+        if (code != null) {
+          await platform.invokeMethod('transmit', {
+            'frequency': code['freq'],
+            'pattern': code['pattern'],
+          });
+        }
+      } catch (_) {}
     }
   }
 
-  List<int> _generateNecPattern(int address, int command) {
-    List<int> pattern = [9000, 4500];
-    int data = ((~command & 0xFF) << 24) | ((command & 0xFF) << 16) | ((~address & 0xFF) << 8) | (address & 0xFF);
-    for (int i = 0; i < 32; i++) {
-      pattern.add(562);
-      pattern.add((data & (1 << i)) != 0 ? 1687 : 562);
-    }
-    pattern.add(562);
-    return pattern;
-  }
+  Future<void> discoverSmartTvs() async {
+    setState(() {
+      isScanning = true;
+      discoveredDevices.clear();
+    });
 
-  Future<void> _scanSmartTvs() async {
-    setState(() => isScanning = true);
     try {
-      RawDatagramSocket.bind(InternetAddress.anyIPv4, 0).then((socket) {
-        socket.broadcastEnabled = true;
-        String ssdpQuery = 
+      RawDatagramSocket socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+      socket.broadcastEnabled = true;
+
+      String ssdpQuery =
           'M-SEARCH * HTTP/1.1\r\n' +
           'HOST: 239.255.255.250:1900\r\n' +
           'MAN: "ssdp:discover"\r\n' +
           'MX: 2\r\n' +
-          'ST: urn:schemas-upnp-org:device:MediaRenderer:1\r\n\r\n';
-        socket.send(utf8.encode(ssdpQuery), InternetAddress('239.255.255.250'), 1900);
-        
-        socket.listen((RawSocketEvent event) {
-          if (event == RawSocketEvent.read) {
-            Datagram? dg = socket.receive();
-            if (dg != null) {
-              String response = utf8.decode(dg.data);
-              if (response.contains('200 OK')) {
-                setState(() => ipController.text = dg.address.address);
+          'ST: ssdp:all\r\n\r\n';
+
+      socket.send(utf8.encode(ssdpQuery), InternetAddress('239.255.255.250'), 1900);
+
+      socket.listen((RawSocketEvent event) {
+        if (event == RawSocketEvent.read) {
+          Datagram? dg = socket.receive();
+          if (dg != null) {
+            String response = utf8.decode(dg.data);
+            if (response.contains('LOCATION:') || response.contains('Server:')) {
+              String ip = dg.address.address;
+              if (!discoveredDevices.contains(ip)) {
+                setState(() {
+                  discoveredDevices.add(ip);
+                });
               }
             }
           }
-        });
-        Future.delayed(const Duration(seconds: 3), () => socket.close());
-      });
-    } catch (_) {}
-    await Future.delayed(const Duration(seconds: 3));
-    setState(() => isScanning = false);
-  }
-
-  void _connectSmartTvWebSocket(String ip, String command) {
-    try {
-      String wsUrl = selectedBrand.contains('Samsung') 
-          ? 'ws://$ip:8001/api/v2/channels/samsung.remote.control'
-          : 'ws://$ip:3000/';
-
-      _wsChannel = IOWebSocketChannel.connect(Uri.parse(wsUrl), pingInterval: const Duration(seconds: 2));
-      
-      var payload = {
-        "method": "ms.remote.control",
-        "params": {
-          "Cmd": "Click",
-          "DataOfCmd": "KEY_$command",
-          "TypeOfRemote": "SendRemoteKey"
         }
-      };
-      
-      _wsChannel?.sink.add(jsonEncode(payload));
+      });
+
+      await Future.delayed(const Duration(seconds: 3));
+      socket.close();
     } catch (_) {}
-  }
 
-  Future<void> sendCommand(String keyName, int cmdCode) async {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-
-    if (selectedMode.contains('IR')) {
-      if (!hasIrSensor) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error: No IR Blaster hardware!'), backgroundColor: Colors.red, duration: Duration(milliseconds: 500)),
-        );
-        return;
-      }
-      try {
-        List<int> pattern = _generateNecPattern(0x00, cmdCode);
-        await platform.invokeMethod('transmit', {'frequency': 38000, 'pattern': pattern});
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('IR: $keyName'), duration: const Duration(milliseconds: 400)),
-        );
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('IR Error: $e')));
-      }
-    } else {
-      String ip = ipController.text.trim();
-      _connectSmartTvWebSocket(ip, keyName);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Wi-Fi Sent: $keyName'), duration: const Duration(milliseconds: 400)),
-      );
-    }
+    setState(() {
+      isScanning = false;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('NOVA UNIVERSAL', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        title: const Text('NOVA UNIVERSAL', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
         centerTitle: true,
-        backgroundColor: Colors.black,
+        backgroundColor: const Color(0xFF1E1E2C),
+        elevation: 0,
         toolbarHeight: 40,
+        actions: [
+          IconButton(
+            icon: isScanning
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.wifi_find, size: 20),
+            onPressed: discoverSmartTvs,
+          )
+        ],
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              // Header Selector Row
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E1E24),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
+              Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(color: const Color(0xFF2A2A3D), borderRadius: BorderRadius.circular(8)),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
                           value: selectedBrand,
-                          isDense: true,
-                          style: const TextStyle(fontSize: 12, color: Colors.white),
-                          dropdownColor: const Color(0xFF1E1E24),
-                          items: brands.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
+                          isExpanded: true,
+                          dropdownColor: const Color(0xFF2A2A3D),
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          items: ['Minister', 'Walton', 'Sony', 'LG', 'Samsung', 'General IR']
+                              .map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
                           onChanged: (val) => setState(() => selectedBrand = val!),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(color: const Color(0xFF2A2A3D), borderRadius: BorderRadius.circular(8)),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
                           value: selectedMode,
-                          isDense: true,
-                          style: const TextStyle(fontSize: 12, color: Colors.white),
-                          dropdownColor: const Color(0xFF1E1E24),
-                          items: modes.map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
+                          isExpanded: true,
+                          dropdownColor: const Color(0xFF2A2A3D),
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          items: ['IR Blaster', 'Wi-Fi Mode']
+                              .map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
                           onChanged: (val) => setState(() => selectedMode = val!),
                         ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              if (selectedMode.contains('Wi-Fi')) ...[
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Expanded(
-                      child: SizedBox(
-                        height: 32,
-                        child: TextField(
-                          controller: ipController,
-                          style: const TextStyle(color: Colors.white, fontSize: 12),
-                          decoration: const InputDecoration(
-                            labelText: 'Smart TV IP',
-                            labelStyle: TextStyle(fontSize: 10),
-                            contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
+              if (discoveredDevices.isNotEmpty)
+                Container(
+                  height: 30,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: discoveredDevices.length,
+                    itemBuilder: (context, i) => Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: Chip(
+                        label: Text(discoveredDevices[i], style: const TextStyle(fontSize: 10)),
+                        backgroundColor: const Color(0xFF3F3F56),
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    SizedBox(
-                      height: 32,
-                      child: ElevatedButton(
-                        onPressed: isScanning ? null : _scanSmartTvs,
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.deepOrange, padding: const EdgeInsets.symmetric(horizontal: 12)),
-                        child: isScanning 
-                          ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)) 
-                          : const Text('SCAN', style: TextStyle(fontSize: 11)),
-                      ),
-                    )
-                  ],
-                ),
-              ],
-              const SizedBox(height: 10),
-
-              // Single Compact Control Surface
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E1E24),
-                    borderRadius: BorderRadius.circular(16),
                   ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildCircleBtn(Icons.power_settings_new, Colors.red, () => sendIrCommand('POWER')),
+                  _buildTextBtn('HOME', () => sendIrCommand('HOME')),
+                  _buildTextBtn('MODE', () => sendIrCommand('MODE')),
+                  _buildCircleBtn(Icons.volume_off, Colors.blue, () => sendIrCommand('MUTE')),
+                ],
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  Column(
                     children: [
-                      // Top Action Row
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          _buildRoundBtn(Icons.power_settings_new, Colors.red, () => sendCommand('POWER', 0x12)),
-                          _buildCompactBtn('HOME', () => sendCommand('HOME', 0x20)),
-                          _buildCompactBtn('MODE', () => sendCommand('MODE', 0x21)),
-                          _buildRoundBtn(Icons.volume_off, Colors.blueAccent, () => sendCommand('MUTE', 0x0D)),
-                        ],
-                      ),
-
-                      // D-Pad + Vol/Ch Middle Cluster
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          // Vol Column
-                          Column(
-                            children: [
-                              _buildMiniBtn('VOL +', () => sendCommand('VOL_UP', 0x06)),
-                              const SizedBox(height: 8),
-                              _buildMiniBtn('VOL -', () => sendCommand('VOL_DOWN', 0x07)),
-                            ],
-                          ),
-
-                          // D-Pad Circle
-                          Container(
-                            width: 140,
-                            height: 140,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFF2C2C38),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Stack(
-                              children: [
-                                Align(
-                                  alignment: Alignment.topCenter,
-                                  child: IconButton(
-                                    padding: EdgeInsets.zero,
-                                    iconSize: 28,
-                                    icon: const Icon(Icons.arrow_drop_up, color: Colors.white),
-                                    onPressed: () => sendCommand('UP', 0x01),
-                                  ),
-                                ),
-                                Align(
-                                  alignment: Alignment.bottomCenter,
-                                  child: IconButton(
-                                    padding: EdgeInsets.zero,
-                                    iconSize: 28,
-                                    icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
-                                    onPressed: () => sendCommand('DOWN', 0x02),
-                                  ),
-                                ),
-                                Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: IconButton(
-                                    padding: EdgeInsets.zero,
-                                    iconSize: 28,
-                                    icon: const Icon(Icons.arrow_left, color: Colors.white),
-                                    onPressed: () => sendCommand('LEFT', 0x03),
-                                  ),
-                                ),
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: IconButton(
-                                    padding: EdgeInsets.zero,
-                                    iconSize: 28,
-                                    icon: const Icon(Icons.arrow_right, color: Colors.white),
-                                    onPressed: () => sendCommand('RIGHT', 0x04),
-                                  ),
-                                ),
-                                Center(
-                                  child: GestureDetector(
-                                    onTap: () => sendCommand('ENTER', 0x05),
-                                    child: Container(
-                                      width: 44,
-                                      height: 44,
-                                      decoration: const BoxDecoration(
-                                        color: Colors.black54,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Center(
-                                        child: Text('OK', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          // Ch Column
-                          Column(
-                            children: [
-                              _buildMiniBtn('CH ▲', () => sendCommand('CH_UP', 0x08)),
-                              const SizedBox(height: 8),
-                              _buildMiniBtn('CH ▼', () => sendCommand('CH_DOWN', 0x09)),
-                            ],
-                          ),
-                        ],
-                      ),
-
-                      // Number Grid (Compact)
-                      GridView.count(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        crossAxisCount: 3,
-                        childAspectRatio: 2.8,
-                        mainAxisSpacing: 6,
-                        crossAxisSpacing: 6,
-                        children: [
-                          for (var i = 1; i <= 9; i++) _buildNumBtn(i.toString(), 0x10 + i),
-                          _buildNumBtn('-', 0x0C),
-                          _buildNumBtn('0', 0x10),
-                          _buildNumBtn('↻', 0x1A),
-                        ],
-                      ),
-
-                      // App Shortcuts
-                      Row(
-                        children: [
-                          Expanded(child: _buildAppBtn('YouTube', Colors.red, () => sendCommand('YOUTUBE', 0x50))),
-                          const SizedBox(width: 4),
-                          Expanded(child: _buildAppBtn('Hoichoi', const Color(0xFF2C2C38), () => sendCommand('HOICHOI', 0x51))),
-                          const SizedBox(width: 4),
-                          Expanded(child: _buildAppBtn('Amazon', Colors.lightBlue, () => sendCommand('AMAZON', 0x52))),
-                          const SizedBox(width: 4),
-                          Expanded(child: _buildAppBtn('NETFLIX', Colors.red[900]!, () => sendCommand('NETFLIX', 0x53))),
-                        ],
-                      ),
+                      _buildPillBtn('VOL +', () => sendIrCommand('VOL_UP')),
+                      const SizedBox(height: 8),
+                      _buildPillBtn('VOL -', () => sendIrCommand('VOL_DOWN')),
                     ],
                   ),
+                  SizedBox(
+                    width: 135,
+                    height: 135,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Container(
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF2A2A3D),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        Align(
+                          alignment: Alignment.topCenter,
+                          child: IconButton(
+                            icon: const Icon(Icons.arrow_drop_up, color: Colors.white, size: 28),
+                            onPressed: () => sendIrCommand('UP'),
+                          ),
+                        ),
+                        Align(
+                          alignment: Alignment.bottomCenter,
+                          child: IconButton(
+                            icon: const Icon(Icons.arrow_drop_down, color: Colors.white, size: 28),
+                            onPressed: () => sendIrCommand('DOWN'),
+                          ),
+                        ),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: IconButton(
+                            icon: const Icon(Icons.arrow_left, color: Colors.white, size: 28),
+                            onPressed: () => sendIrCommand('LEFT'),
+                          ),
+                        ),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: IconButton(
+                            icon: const Icon(Icons.arrow_right, color: Colors.white, size: 28),
+                            onPressed: () => sendIrCommand('RIGHT'),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => sendIrCommand('OK'),
+                          child: Container(
+                            width: 48,
+                            height: 48,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF1E1E2C),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Center(
+                              child: Text('OK', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    children: [
+                      _buildPillBtn('CH ▲', () => sendIrCommand('CH_UP')),
+                      const SizedBox(height: 8),
+                      _buildPillBtn('CH ▼', () => sendIrCommand('CH_DOWN')),
+                    ],
+                  ),
+                ],
+              ),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  childAspectRatio: 2.3,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 6,
                 ),
+                itemCount: 12,
+                itemBuilder: (context, index) {
+                  final labels = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '-', '0', '↩'];
+                  return ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2A2A3D),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      padding: EdgeInsets.zero,
+                    ),
+                    onPressed: () => sendIrCommand(labels[index]),
+                    child: Text(
+                      labels[index],
+                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                    ),
+                  );
+                },
+              ),
+              Row(
+                children: [
+                  Expanded(child: _buildAppBtn('YouTube', const Color(0xFFE53935), () => sendIrCommand('YOUTUBE'))),
+                  const SizedBox(width: 6),
+                  Expanded(child: _buildAppBtn('Hoichoi', const Color(0xFF393E46), () => sendIrCommand('HOICHOI'))),
+                  const SizedBox(width: 6),
+                  Expanded(child: _buildAppBtn('Amazon', const Color(0xFF00A8E8), () => sendIrCommand('AMAZON'))),
+                  const SizedBox(width: 6),
+                  Expanded(child: _buildAppBtn('NETFLIX', const Color(0xFFD32F2F), () => sendIrCommand('NETFLIX'))),
+                ],
               ),
             ],
           ),
@@ -401,58 +326,62 @@ class _RemoteHomeScreenState extends State<RemoteHomeScreen> {
     );
   }
 
-  Widget _buildRoundBtn(IconData icon, Color color, VoidCallback onTap) {
-    return CircleAvatar(
-      radius: 18,
-      backgroundColor: color,
-      child: IconButton(padding: EdgeInsets.zero, icon: Icon(icon, color: Colors.white, size: 18), onPressed: onTap),
-    );
-  }
-
-  Widget _buildCompactBtn(String text, VoidCallback onTap) {
-    return ElevatedButton(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFF2C2C38),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+  Widget _buildCircleBtn(IconData icon, Color color, VoidCallback onTap) {
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      child: IconButton(
+        icon: Icon(icon, color: Colors.white, size: 20),
+        onPressed: onTap,
       ),
-      onPressed: onTap,
-      child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
     );
   }
 
-  Widget _buildMiniBtn(String text, VoidCallback onTap) {
+  Widget _buildTextBtn(String label, VoidCallback onTap) {
     return SizedBox(
-      width: 65,
+      width: 62,
       height: 36,
       child: ElevatedButton(
-        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2C2C38), padding: EdgeInsets.zero),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF2A2A3D),
+          padding: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        ),
         onPressed: onTap,
-        child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+        child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
       ),
     );
   }
 
-  Widget _buildNumBtn(String val, int cmdCode) {
-    return ElevatedButton(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFF2C2C38),
-        padding: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+  Widget _buildPillBtn(String label, VoidCallback onTap) {
+    return SizedBox(
+      width: 62,
+      height: 34,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF2A2A3D),
+          padding: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        ),
+        onPressed: onTap,
+        child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
       ),
-      onPressed: () => sendCommand(val, cmdCode),
-      child: Text(val, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
     );
   }
 
   Widget _buildAppBtn(String label, Color bg, VoidCallback onTap) {
-    return ElevatedButton(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: bg,
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+    return SizedBox(
+      height: 30,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: bg,
+          padding: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        ),
+        onPressed: onTap,
+        child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
       ),
-      onPressed: onTap,
-      child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
     );
   }
 }
