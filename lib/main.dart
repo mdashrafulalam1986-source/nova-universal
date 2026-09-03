@@ -68,6 +68,9 @@ class _RemoteScreenState extends State<RemoteScreen> {
       '0': 0x30, '-': 0x0C, '↩': 0x0B, 'YOUTUBE': 0x40, 'NETFLIX': 0x41,
       'HOICHOI': 0x42, 'AMAZON': 0x43, 'PLAY': 0x50, 'REWIND': 0x51, 'FFWD': 0x52,
       'RED': 0x60, 'GREEN': 0x61, 'YELLOW': 0x62, 'BLUE': 0x63,
+      'N-CH.P': 0x70, 'CC': 0x71, 'MTR': 0x72,
+      'F-MODE': 0x73, 'S.MCOB': 0x74, 'CRLUST': 0x75,
+      'FMODE': 0x76, 'S.MODE': 0x77, 'DELETE': 0x78
     },
     'Walton': {
       'POWER': 0x40, 'MUTE': 0x41, 'NAV': 0x42,
@@ -78,6 +81,9 @@ class _RemoteScreenState extends State<RemoteScreen> {
       '0': 0x20, '-': 0x1A, '↩': 0x1B, 'YOUTUBE': 0x50, 'NETFLIX': 0x51,
       'HOICHOI': 0x52, 'AMAZON': 0x53, 'PLAY': 0x60, 'REWIND': 0x61, 'FFWD': 0x62,
       'RED': 0x70, 'GREEN': 0x71, 'YELLOW': 0x72, 'BLUE': 0x73,
+      'N-CH.P': 0x80, 'CC': 0x81, 'MTR': 0x82,
+      'F-MODE': 0x83, 'S.MCOB': 0x84, 'CRLUST': 0x85,
+      'FMODE': 0x86, 'S.MODE': 0x87, 'DELETE': 0x88
     },
     'Sony': {
       'POWER': 0x0A, 'MUTE': 0x0D, 'NAV': 0x25,
@@ -88,6 +94,9 @@ class _RemoteScreenState extends State<RemoteScreen> {
       '0': 0x09, '-': 0x0B, '↩': 0x23, 'YOUTUBE': 0x61, 'NETFLIX': 0x62,
       'HOICHOI': 0x63, 'AMAZON': 0x64, 'PLAY': 0x38, 'REWIND': 0x3A, 'FFWD': 0x3B,
       'RED': 0x68, 'GREEN': 0x69, 'YELLOW': 0x6A, 'BLUE': 0x6B,
+      'N-CH.P': 0x70, 'CC': 0x71, 'MTR': 0x72,
+      'F-MODE': 0x73, 'S.MCOB': 0x74, 'CRLUST': 0x75,
+      'FMODE': 0x76, 'S.MODE': 0x77, 'DELETE': 0x78
     },
     'LG': {
       'POWER': 0x08, 'MUTE': 0x09, 'NAV': 0x0B,
@@ -98,6 +107,9 @@ class _RemoteScreenState extends State<RemoteScreen> {
       '0': 0x19, '-': 0x4C, '↩': 0x28, 'YOUTUBE': 0xFB, 'NETFLIX': 0x5B,
       'HOICHOI': 0x5C, 'AMAZON': 0x5D, 'PLAY': 0xB0, 'REWIND': 0x8F, 'FFWD': 0x8E,
       'RED': 0x6E, 'GREEN': 0x6F, 'YELLOW': 0x70, 'BLUE': 0x71,
+      'N-CH.P': 0x80, 'CC': 0x81, 'MTR': 0x82,
+      'F-MODE': 0x83, 'S.MCOB': 0x84, 'CRLUST': 0x85,
+      'FMODE': 0x86, 'S.MODE': 0x87, 'DELETE': 0x88
     },
     'Samsung': {
       'POWER': 0x02, 'MUTE': 0x0F, 'NAV': 0x01,
@@ -108,6 +120,9 @@ class _RemoteScreenState extends State<RemoteScreen> {
       '0': 0x11, '-': 0x1A, '↩': 0x58, 'YOUTUBE': 0x98, 'NETFLIX': 0x99,
       'HOICHOI': 0x9A, 'AMAZON': 0x9B, 'PLAY': 0x47, 'REWIND': 0x45, 'FFWD': 0x48,
       'RED': 0x6C, 'GREEN': 0x6D, 'YELLOW': 0x6E, 'BLUE': 0x6F,
+      'N-CH.P': 0x80, 'CC': 0x81, 'MTR': 0x82,
+      'F-MODE': 0x83, 'S.MCOB': 0x84, 'CRLUST': 0x85,
+      'FMODE': 0x86, 'S.MODE': 0x87, 'DELETE': 0x88
     },
     'General IR / Chinese TV': {
       'POWER': 0x12, 'MUTE': 0x10, 'NAV': 0x15,
@@ -118,6 +133,9 @@ class _RemoteScreenState extends State<RemoteScreen> {
       '0': 0x30, '-': 0x0C, '↩': 0x0B, 'YOUTUBE': 0x40, 'NETFLIX': 0x41,
       'HOICHOI': 0x42, 'AMAZON': 0x43, 'PLAY': 0x50, 'REWIND': 0x51, 'FFWD': 0x52,
       'RED': 0x60, 'GREEN': 0x61, 'YELLOW': 0x62, 'BLUE': 0x63,
+      'N-CH.P': 0x70, 'CC': 0x71, 'MTR': 0x72,
+      'F-MODE': 0x73, 'S.MCOB': 0x74, 'CRLUST': 0x75,
+      'FMODE': 0x76, 'S.MODE': 0x77, 'DELETE': 0x78
     }
   };
 
@@ -144,7 +162,6 @@ class _RemoteScreenState extends State<RemoteScreen> {
     return pattern;
   }
 
-  // WebSocket Connection Handler for Smart TVs
   void sendWebSocketCommand(String key) {
     String ip = ipController.text.trim();
     if (ip.isEmpty) return;
@@ -432,19 +449,19 @@ class _RemoteScreenState extends State<RemoteScreen> {
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 crossAxisCount: 3,
-                childAspectRatio: 3.5,
-                crossAxisSpacing: 4,
-                mainAxisSpacing: 4,
+                childAspectRatio: 3.2,
+                crossAxisSpacing: 5,
+                mainAxisSpacing: 5,
                 children: [
-                  _buildSmallText('N-CH.P', () => sendCommand('CH_UP')),
-                  _buildSmallText('CC', () => sendCommand('MODE')),
-                  _buildSmallText('MTR', () => sendCommand('MUTE')),
-                  _buildSmallText('F-MODE', () => sendCommand('MODE')),
-                  _buildSmallText('S.MCOB', () => sendCommand('NAV')),
-                  _buildSmallText('CRLUST', () => sendCommand('NAV')),
-                  _buildSmallText('FMODE', () => sendCommand('MODE')),
-                  _buildSmallText('S.MODE', () => sendCommand('MODE')),
-                  _buildSmallText('DELETE', () => sendCommand('↩')),
+                  _buildSmallBtn('N-CH.P', () => sendCommand('N-CH.P')),
+                  _buildSmallBtn('CC', () => sendCommand('CC')),
+                  _buildSmallBtn('MTR', () => sendCommand('MTR')),
+                  _buildSmallBtn('F-MODE', () => sendCommand('F-MODE')),
+                  _buildSmallBtn('S.MCOB', () => sendCommand('S.MCOB')),
+                  _buildSmallBtn('CRLUST', () => sendCommand('CRLUST')),
+                  _buildSmallBtn('FMODE', () => sendCommand('FMODE')),
+                  _buildSmallBtn('S.MODE', () => sendCommand('S.MODE')),
+                  _buildSmallBtn('DELETE', () => sendCommand('DELETE')),
                 ],
               ),
 
@@ -504,7 +521,7 @@ class _RemoteScreenState extends State<RemoteScreen> {
       height: 26,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF1E1E2C),
+          backgroundColor: const Color(0xFF2A2A3D),
           padding: EdgeInsets.zero,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
         ),
@@ -573,24 +590,6 @@ class _RemoteScreenState extends State<RemoteScreen> {
         ),
         onPressed: onTap,
         child: Text(text, style: const TextStyle(color: Colors.black, fontSize: 9, fontWeight: FontWeight.bold)),
-      ),
-    );
-  }
-
-  Widget _buildSmallText(String text, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF1E1E2C),
-          borderRadius: BorderRadius.circular(3),
-        ),
-        child: Center(
-          child: Text(
-            text,
-            style: const TextStyle(color: Colors.grey, fontSize: 8, fontWeight: FontWeight.w500),
-          ),
-        ),
       ),
     );
   }
