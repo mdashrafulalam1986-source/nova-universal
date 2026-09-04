@@ -2,7 +2,6 @@ package com.nova.universal
 
 import android.content.Context
 import android.hardware.ConsumerIrManager
-import androidx.annotation.NonNull
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -10,29 +9,37 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity: FlutterActivity() {
     private val CHANNEL = "com.nova.universal/ir"
 
-    override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
-            if (call.method == "transmit") {
-                val frequency = call.argument<Int>("frequency") ?: 38000
-                val patternList = call.argument<List<Int>>("pattern")
-                
-                val irManager = getSystemService(Context.CONSUMER_IR_SERVICE) as? ConsumerIrManager
-
-                if (irManager != null && irManager.hasIrEmitter()) {
-                    if (patternList != null) {
-                        val pattern = patternList.map { it.toInt() }.toIntArray()
-                        irManager.transmit(frequency, pattern)
-                        result.success(true)
-                    } else {
-                        result.error("INVALID_PATTERN", "IR Pattern was null", null)
-                    }
+            if (call.method == "transmitIR") {
+                val command = call.argument<String>("command")
+                val success = sendNecIrSignal(command)
+                if (success) {
+                    result.success("Signal Transmitted with Micro Timing")
                 } else {
-                    result.error("NO_IR_EMITTER", "Device does not have an IR Blaster", null)
+                    result.error("NO_IR_EMITTER", "Device does not have an active IR Blaster", null)
                 }
             } else {
                 result.notImplemented()
             }
         }
+    }
+
+    private fun sendNecIrSignal(command: String?): Boolean {
+        val irManager = getSystemService(Context.CONSUMER_IR_SERVICE) as ConsumerIrManager?
+        if (irManager != null && irManager.hasIrEmitter()) {
+            val frequency = 38000
+            val pattern = intArrayOf(
+                9000, 4500,
+                560, 1690, 560, 560, 560, 1690, 560, 560,
+                560, 1690, 560, 1690, 560, 560, 560, 1690,
+                560, 560, 560, 560, 560, 1690, 560, 560,
+                560, 40000
+            )
+            irManager.transmit(frequency, pattern)
+            return true
+        }
+        return false
     }
 }
